@@ -1,0 +1,64 @@
+name: 🏗️ Build Results
+
+on:
+  push:
+    paths:
+      - 'excel/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: 🟢 Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: 📦 Install
+        run: npm ci
+      
+      - name: 🔍 Find Excel
+        id: find
+        run: |
+          EXCEL=$(find excel/ -name "*.xlsx" -o -name "*.xls" 2>/dev/null | head -1)
+          if [ -z "$EXCEL" ]; then
+            echo "❌ No Excel file found in excel/"
+            exit 1
+          fi
+          echo "file=$EXCEL" >> $GITHUB_OUTPUT
+          echo "✅ Found: $EXCEL"
+      
+      - name: 🏗️ Build
+        run: node build.js "${{ steps.find.outputs.file }}" --compress
+      
+      - name: 🚀 Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/
+          if ! git diff --staged --quiet; then
+            STUDENTS=$(node -e "console.log(require('./data/stats.json').total)")
+            git commit -m "📊 تحديث النتائج - $STUDENTS طالب"
+            git push
+            echo "✅ Pushed"
+          else
+            echo "✅ No changes"
+          fi
+      
+      - name: 📋 Summary
+        if: always()
+        run: |
+          if [ -f "data/stats.json" ]; then
+            echo "## 🎉 تم البناء بنجاح!" >> $GITHUB_STEP_SUMMARY
+            node -e "const s=require('./data/stats.json');console.log('| المقياس | القيمة |\n|---|---|\n| 👥 إجمالي | '+s.total.toLocaleString('ar-EG')+' |\n| ✅ ناجح | '+s.success.toLocaleString('ar-EG')+' |\n| ❌ راسب | '+s.failed.toLocaleString('ar-EG')+' |');" >> $GITHUB_STEP_SUMMARY
+          fi
