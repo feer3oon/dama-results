@@ -53,3 +53,343 @@ function bindEvents(){$('#themeToggle').onclick=toggleTheme;$('#navToggle').oncl
 function registerSW(){if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{})}}
 async function init(){applyTheme();bindEvents();await loadData();applySettings();renderHome();renderStats();renderTop('100');trackVisitor();handleRoute();registerSW();setTimeout(()=>{$('#loadingScreen').classList.add('done')},800)}
 document.addEventListener('DOMContentLoaded',init);
+
+/* ========== GITHUB UPLOAD SYSTEM ========== */
+const GitHubUploader = {
+  token: null,
+  owner: null,
+  repo: null,
+  branch: 'main',
+  
+  init() {
+    // استرجاع البيانات من localStorage
+    this.token = localStorage.getItem('github_token');
+    this.owner = localStorage.getItem('github_owner');
+    this.repo = localStorage.getItem('github_repo');
+  },
+  
+  setConfig(token, owner, repo) {
+    this.token = token;
+    this.owner = owner;
+    this.repo = repo;
+    localStorage.setItem('github_token', token);
+    localStorage.setItem('github_owner', owner);
+    localStorage.setItem('github_repo', repo);
+  },
+  
+  async uploadFile(filePath, content, message = '📊 Upload file') {
+    if (!this.token || !this.owner || !this.repo) {
+      throw new Error('GitHub config not set');
+    }
+    
+    const url = `https://api.github.com/repos/${this.owner}/${this.repo}/contents/${filePath}`;
+    
+    // تشفير المحتوى لـ Base64
+    const base64Content = btoa(unescape(encodeURIComponent(content)));
+    
+    const response = await fetch(url, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `token ${this.token}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/vnd.github.v3+json'
+      },
+      body: JSON.stringify({
+        message: message,
+        content: base64Content,
+        branch: this.branch
+      })
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Upload failed');
+    }
+    
+    return await response.json();
+  },
+  
+  async uploadLargeFile(filePath, file, onProgress) {
+    if (!this.token || !this.owner || !this.repo) {
+      throw new Error('GitHub config not set');
+    }
+    
+    const CHUNK_SIZE = 10 * 1024 * 1024; // 10MB chunks
+    const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+    
+    log(`📦 Uploading ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB) in ${totalChunks} chunks`);
+    
+    // قراءة الملف كـ ArrayBuffer
+    const arrayBuffer = await file.arrayBuffer();
+    const uint8Array = new Uint8Array(arrayBuffer);
+    
+    for (let i = 0; i < totalChunks; i++) {
+      const start = i * CHUNK_SIZE;
+      const end = Math.min(start + CHUNK_SIZE, file.size);
+      const chunk = uint8Array.slice(start, end);
+      
+      // تحويل الـ chunk لـ Base64
+      const base64Chunk = btoa(String.fromCharCode.apply(null, chunk));
+      
+      const chunkPath = `${filePath}.part${i + 1}`;
+      const url = `https://api.github.com/repos/${this.owner}/${this.repo}/contents/${chunkPath}`;
+      
+      const response = await fetch(url, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `token ${this.token}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/vnd.github.v3+json'
+        },
+        body: JSON.stringify({
+          message: `📦 Upload chunk ${i + 1}/${totalChunks}`,
+          content: base64Chunk,
+          branch: this.branch
+        })
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(`Chunk ${i + 1} failed: ${error.message}`);
+      }
+      
+      const progress = ((i + 1) / totalChunks) * 100;
+      onProgress && onProgress(progress, i + 1, totalChunks);
+      
+      log(`✅ Chunk ${i + 1}/${totalChunks} uploaded`);
+    }
+    
+    // إنشاء ملف manifest
+    const manifest = {
+      originalName: file.name,
+      totalSize: file.size,
+      totalChunks: totalChunks,
+      chunkSize: CHUNK_SIZE,
+      uploadDate: new Date().toISOString()
+    };
+    
+    await this.uploadFile(
+      `${filePath}.manifest.json`,
+      JSON.stringify(manifest, null, 2),
+      `📋 Upload manifest for ${file.name}`
+    );
+    
+    return { success: true, chunks: totalChunks, size: file.size };
+  },
+  
+  async triggerWorkflow(workflowId = 'build.yml') {
+    const url = `https://api.github.com/repos/${this.owner}/${this.repo}/actions/workflows/${workflowId}/dispatches`;
+    
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `token ${this.token}`,
+        'Accept': 'application/vnd.github.v3+json',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        ref: this.branch
+      })
+    });
+    
+    if (!response.ok && response.status !== 204) {
+      throw new Error('Failed to trigger workflow');
+    }
+    
+    return { success: true };
+  }
+};
+
+// تهيئة النظام
+GitHubUploader.init();
+
+// إضافة واجهة رفع في لوحة التحكم
+function setupGitHubUpload() {
+  const adminDash = $('#adminDash');
+  if (!adminDash) return;
+  
+  // إضافة تبويب جديد
+  const tabsContainer = $('.admin-tabs', adminDash);
+  const newTab = document.createElement('button');
+  newTab.className = 'tab';
+  newTab.dataset.atab = 'github';
+  newTab.innerHTML = '<i class="fab fa-github"></i> رفع لـ GitHub';
+  tabsContainer.appendChild(newTab);
+  
+  // إضافة محتوى التبويب
+  const tabContent = document.createElement('div');
+  tabContent.className = 'admin-tab';
+  tabContent.dataset.atab = 'github';
+  tabContent.innerHTML = `
+    <div class="github-config">
+      <h3><i class="fab fa-github"></i> إعدادات GitHub</h3>
+      <div class="setting">
+        <label>Personal Access Token</label>
+        <input type="password" id="githubToken" placeholder="ghp_xxxxxxxxxxxx" value="${GitHubUploader.token || ''}" />
+      </div>
+      <div class="setting">
+        <label>Owner (Username)</label>
+        <input type="text" id="githubOwner" placeholder="username" value="${GitHubUploader.owner || ''}" />
+      </div>
+      <div class="setting">
+        <label>Repository Name</label>
+        <input type="text" id="githubRepo" placeholder="dama-results" value="${GitHubUploader.repo || ''}" />
+      </div>
+      <button class="btn btn-primary" id="saveGithubConfig">
+        <i class="fas fa-save"></i> حفظ الإعدادات
+      </button>
+    </div>
+    
+    <div class="github-upload" style="margin-top:20px">
+      <h3><i class="fas fa-cloud-upload-alt"></i> رفع ملف Excel</h3>
+      <div class="upload-zone" id="githubUploadZone">
+        <i class="fas fa-file-excel"></i>
+        <p>اسحب ملف Excel هنا أو اضغط للاختيار</p>
+        <p class="small">يدعم أي حجم - سيتم التقسيم تلقائياً</p>
+        <input type="file" id="githubExcelFile" accept=".xlsx,.xls" hidden />
+        <button class="btn btn-primary" id="pickGithubFile">اختر ملف Excel</button>
+      </div>
+      
+      <div id="githubUploadProgress" class="progress hidden">
+        <div class="progress-bar">
+          <div class="progress-fill" id="githubProgressFill"></div>
+        </div>
+        <p id="githubProgressText">جاري الرفع...</p>
+        <p id="githubProgressDetail" class="small"></p>
+      </div>
+      
+      <div id="githubUploadResult" class="report hidden"></div>
+      
+      <button class="btn btn-success" id="triggerWorkflow" style="margin-top:14px" disabled>
+        <i class="fas fa-rocket"></i> تشغيل GitHub Actions
+      </button>
+    </div>
+    
+    <div class="github-help" style="margin-top:20px;padding:14px;background:var(--surface-2);border-radius:12px">
+      <h4><i class="fas fa-info-circle"></i> كيفية الحصول على Personal Access Token</h4>
+      <ol style="padding-right:20px;list-style:decimal;color:var(--text-soft);font-size:.9rem">
+        <li>اذهب إلى <a href="https://github.com/settings/tokens" target="_blank" style="color:var(--primary)">github.com/settings/tokens</a></li>
+        <li>اضغط "Generate new token (classic)"</li>
+        <li>اختر الصلاحيات: <code>repo</code> و <code>workflow</code></li>
+        <li>انسخ الـ token واحفظه هنا</li>
+      </ol>
+    </div>
+  `;
+  adminDash.appendChild(tabContent);
+  
+  // ربط الأحداث
+  $('#saveGithubConfig').onclick = () => {
+    const token = $('#githubToken').value.trim();
+    const owner = $('#githubOwner').value.trim();
+    const repo = $('#githubRepo').value.trim();
+    
+    if (!token || !owner || !repo) {
+      toast('املأ كل الحقول', 'error');
+      return;
+    }
+    
+    GitHubUploader.setConfig(token, owner, repo);
+    toast('تم حفظ الإعدادات', 'success');
+  };
+  
+  const zone = $('#githubUploadZone');
+  const fileInput = $('#githubExcelFile');
+  
+  $('#pickGithubFile').onclick = () => fileInput.click();
+  
+  fileInput.onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    if (!GitHubUploader.token || !GitHubUploader.owner || !GitHubUploader.repo) {
+      toast('احفظ إعدادات GitHub أولاً', 'error');
+      return;
+    }
+    
+    await uploadToGitHub(file);
+  };
+  
+  zone.ondragover = (e) => { e.preventDefault(); zone.classList.add('drag'); };
+  zone.ondragleave = () => zone.classList.remove('drag');
+  zone.ondrop = async (e) => {
+    e.preventDefault();
+    zone.classList.remove('drag');
+    const file = e.dataTransfer.files[0];
+    if (file) await uploadToGitHub(file);
+  };
+  
+  $('#triggerWorkflow').onclick = async () => {
+    try {
+      toast('جاري تشغيل GitHub Actions...', '');
+      await GitHubUploader.triggerWorkflow();
+      toast('تم تشغيل GitHub Actions بنجاح!', 'success');
+      setTimeout(() => {
+        window.open(`https://github.com/${GitHubUploader.owner}/${GitHubUploader.repo}/actions`, '_blank');
+      }, 1000);
+    } catch (err) {
+      toast('فشل تشغيل Actions: ' + err.message, 'error');
+    }
+  };
+}
+
+async function uploadToGitHub(file) {
+  const progressBox = $('#githubUploadProgress');
+  const progressFill = $('#githubProgressFill');
+  const progressText = $('#githubProgressText');
+  const progressDetail = $('#githubProgressDetail');
+  const resultBox = $('#githubUploadResult');
+  const triggerBtn = $('#triggerWorkflow');
+  
+  progressBox.classList.remove('hidden');
+  resultBox.classList.add('hidden');
+  triggerBtn.disabled = true;
+  
+  try {
+    const startTime = Date.now();
+    
+    const result = await GitHubUploader.uploadLargeFile(
+      'excel/results.xlsx',
+      file,
+      (progress, current, total) => {
+        progressFill.style.width = progress + '%';
+        progressText.textContent = `جاري الرفع... ${progress.toFixed(1)}%`;
+        progressDetail.textContent = `Chunk ${current}/${total} | ${(file.size / 1024 / 1024).toFixed(2)} MB`;
+      }
+    );
+    
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    
+    resultBox.classList.remove('hidden');
+    resultBox.innerHTML = `
+      <h4 class="ok"><i class="fas fa-check-circle"></i> تم الرفع بنجاح!</h4>
+      <ul>
+        <li class="ok">✅ اسم الملف: <strong>${file.name}</strong></li>
+        <li class="ok">✅ الحجم: <strong>${(result.size / 1024 / 1024).toFixed(2)} MB</strong></li>
+        <li class="ok">✅ عدد الأجزاء: <strong>${result.chunks}</strong></li>
+        <li class="ok">✅ الوقت: <strong>${elapsed} ثانية</strong></li>
+      </ul>
+      <p style="margin-top:10px;color:var(--text-soft)">
+        💡 اضغط "تشغيل GitHub Actions" لبدء معالجة الملف
+      </p>
+    `;
+    
+    triggerBtn.disabled = false;
+    toast('تم الرفع بنجاح!', 'success');
+    
+  } catch (err) {
+    resultBox.classList.remove('hidden');
+    resultBox.innerHTML = `
+      <h4 class="err"><i class="fas fa-times-circle"></i> فشل الرفع</h4>
+      <p class="err">${err.message}</p>
+      <p style="margin-top:10px;color:var(--text-soft)">
+        تأكد من صحة الـ Token والصلاحيات
+      </p>
+    `;
+    toast('فشل الرفع: ' + err.message, 'error');
+  }
+}
+
+// تشغيل الإعداد بعد تحميل الصفحة
+document.addEventListener('DOMContentLoaded', () => {
+  setTimeout(setupGitHubUpload, 100);
+});
