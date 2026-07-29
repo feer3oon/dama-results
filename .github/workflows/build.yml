@@ -27,12 +27,48 @@ jobs:
       - name: 📦 Install
         run: npm ci
       
+      - name: 🔍 Check for chunked upload
+        id: check
+        run: |
+          if [ -f "excel/results.xlsx.manifest.json" ]; then
+            echo "chunked=true" >> $GITHUB_OUTPUT
+            echo "✅ Found chunked upload"
+          else
+            echo "chunked=false" >> $GITHUB_OUTPUT
+            echo "ℹ️ Single file upload"
+          fi
+      
+      - name: 🧩 Reassemble chunks
+        if: steps.check.outputs.chunked == 'true'
+        run: |
+          echo "📦 Reassembling chunks..."
+          
+          # قراءة الـ manifest
+          MANIFEST=$(cat excel/results.xlsx.manifest.json)
+          TOTAL_CHUNKS=$(echo $MANIFEST | jq -r '.totalChunks')
+          
+          echo "Total chunks: $TOTAL_CHUNKS"
+          
+          # دمج الأجزاء
+          > excel/results.xlsx
+          for i in $(seq 1 $TOTAL_CHUNKS); do
+            echo "Merging chunk $i/$TOTAL_CHUNKS"
+            cat "excel/results.xlsx.part$i" >> excel/results.xlsx
+          done
+          
+          # حذف الأجزاء والـ manifest
+          rm excel/results.xlsx.part* excel/results.xlsx.manifest.json
+          
+          # التحقق من الحجم
+          SIZE=$(stat -c%s excel/results.xlsx)
+          echo "✅ Reassembled file size: $((SIZE / 1024 / 1024)) MB"
+      
       - name: 🔍 Find Excel
         id: find
         run: |
           EXCEL=$(find excel/ -name "*.xlsx" -o -name "*.xls" 2>/dev/null | head -1)
           if [ -z "$EXCEL" ]; then
-            echo "❌ No Excel file found in excel/"
+            echo "❌ No Excel file found"
             exit 1
           fi
           echo "file=$EXCEL" >> $GITHUB_OUTPUT
