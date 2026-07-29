@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="theme-color" content="#0b3d91" />
+<meta name="description" content="نتيجة الثانوية العامة من DAMA" />
+<title>نتيجة الثانوية العامة من DAMA</title>
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%230b3d91'/%3E%3Ctext x='50' y='65' font-size='55' text-anchor='middle' fill='gold' font-family='Cairo' font-weight='900'%3ED%3C/text%3E%3C/svg%3E" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;800;900&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<div id="loadingScreen" class="loading-screen">
+  <div class="loader-wrap">
+    <div class="logo-loader">DAMA</div>
+    <div class="spinner"></div>
+    <p class="loader-text">جاري تحميل نتيجة الثانوية العامة...</p>
+  </div>
+</div>
+
+<div id="maintenanceScreen" class="maintenance-screen hidden">
+  <div class="maintenance-box">
+    <i class="fas fa-tools"></i>
+    <h1>الموقع تحت الصيانة</h1>
+    <p>نعمل حالياً على تحديث النتائج. يرجى المحاولة لاحقاً.</p>
+  </div>
+</div>
+
+<div id="announcementBar" class="announcement-bar hidden" role="alert">
+  <i class="fas fa-bullhorn"></i>
+  <div class="marquee"><span id="announcementText"></span></div>
+  <button id="closeAnnouncement" aria-label="إغلاق"><i class="fas fa-times"></i></button>
+</div>
+
+<nav class="navbar glass">
+  <div class="nav-container">
+    <a href="#home" class="brand">
+      <div class="brand-logo">DAMA</div>
+      <div class="brand-text">
+        <span class="brand-title">نتيجة الثانوية العامة</span>
+        <span class="brand-sub">منصة DAMA التعليمية</span>
+      </div>
+    </a>
+    <ul class="nav-links">
+      <li><a href="#home" data-route="home"><i class="fas fa-home"></i> الرئيسية</a></li>
+      <li><a href="#stats" data-route="stats"><i class="fas fa-chart-bar"></i> الإحصائيات</a></li>
+      <li><a href="#top" data-route="top"><i class="fas fa-trophy"></i> الأوائل</a></li>
+      <li><a href="#news" data-route="news"><i class="fas fa-newspaper"></i> الأخبار</a></li>
+    </ul>
+    <div class="nav-actions">
+      <button id="themeToggle" class="icon-btn" aria-label="تبديل الوضع"><i class="fas fa-moon"></i></button>
+      <button id="navToggle" class="icon-btn mobile-only" aria-label="القائمة"><i class="fas fa-bars"></i></button>
+    </div>
+  </div>
+</nav>
+
+<main id="app">
+  <section id="page-home" class="page active">
+    <div class="hero">
+      <div class="hero-bg">
+        <div class="blob b1"></div>
+        <div class="blob b2"></div>
+        <div class="blob b3"></div>
+        <div class="grid-overlay"></div>
+      </div>
+      <div class="hero-content">
+        <div class="hero-badge glass"><i class="fas fa-graduation-cap"></i> العام الدراسي 2025 / 2026</div>
+        <h1 class="hero-title">
+          نتيجة <span class="gold">الثانوية العامة</span>
+          <br />من <span class="brand-accent">DAMA</span>
+        </h1>
+        <p class="hero-sub">ابحث عن نتيجتك بسهولة وسرعة عبر رقم الجلوس أو الاسم</p>
+
+        <div class="search-card glass">
+          <div class="search-tabs">
+            <button class="tab active" data-tab="seat"><i class="fas fa-id-card"></i> رقم الجلوس</button>
+            <button class="tab" data-tab="name"><i class="fas fa-user"></i> اسم الطالب</button>
+          </div>
+          <div class="search-body">
+            <div class="input-wrap">
+              <i class="fas fa-search"></i>
+              <input id="searchInput" type="text" autocomplete="off" placeholder="أدخل رقم الجلوس..." />
+              <button id="clearSearch" class="clear-btn" aria-label="مسح"><i class="fas fa-times-circle"></i></button>
+            </div>
+            <div id="suggestions" class="suggestions hidden"></div>
+            <button id="searchBtn" class="btn btn-primary btn-lg"><i class="fas fa-magnifying-glass"></i> عرض النتيجة</button>
+          </div>
+        </div>
+
+        <div class="stats-row">
+          <div class="stat-card glass">
+            <div class="stat-icon bg-blue"><i class="fas fa-users"></i></div>
+            <div class="stat-info"><span class="stat-num" id="statStudents">0</span><span class="stat-label">إجمالي الطلاب</span></div>
+          </div>
+          <div class="stat-card glass">
+            <div class="stat-icon bg-green"><i class="fas fa-check-circle"></i></div>
+            <div class="stat-info"><span class="stat-num" id="statSuccess">0</span><span class="stat-label">ناجح</span></div>
+          </div>
+          <div class="stat-card glass">
+            <div class="stat-icon bg-red"><i class="fas fa-times-circle"></i></div>
+            <div class="stat-info"><span class="stat-num" id="statFailed">0</span><span class="stat-label">راسب</span></div>
+          </div>
+          <div class="stat-card glass">
+            <div class="stat-icon bg-gold"><i class="fas fa-star"></i></div>
+            <div class="stat-info"><span class="stat-num" id="statPercent">0%</span><span class="stat-label">نسبة النجاح</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <section class="section">
+      <div class="container">
+        <div class="section-head"><h2><i class="fas fa-newspaper"></i> آخر الأخبار</h2></div>
+        <div class="news-slider" id="newsSlider"></div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container">
+        <div class="section-head"><h2><i class="fas fa-bolt"></i> مميزات المنصة</h2></div>
+        <div class="features-grid">
+          <div class="feature-card glass"><i class="fas fa-rocket"></i><h3>بحث فوري</h3><p>نتيجة فورية في ثوانٍ</p></div>
+          <div class="feature-card glass"><i class="fas fa-shield-halved"></i><h3>آمن وموثوق</h3><p>بياناتك محمية</p></div>
+          <div class="feature-card glass"><i class="fas fa-mobile-screen"></i><h3>متوافق مع الجوال</h3><p>يعمل على جميع الأجهزة</p></div>
+          <div class="feature-card glass"><i class="fas fa-file-pdf"></i><h3>تحميل PDF</h3><p>احفظ نتيجتك PDF</p></div>
+          <div class="feature-card glass"><i class="fas fa-share-nodes"></i><h3>مشاركة سهلة</h3><p>شارك عبر واتساب</p></div>
+          <div class="feature-card glass"><i class="fas fa-qrcode"></i><h3>QR Code</h3><p>رمز QR لنتيجتك</p></div>
+        </div>
+      </div>
+    </section>
+  </section>
+
+  <section id="page-result" class="page">
+    <div class="container">
+      <button class="btn btn-ghost back-btn" data-route="home"><i class="fas fa-arrow-right"></i> العودة</button>
+      <div id="resultCard" class="result-card glass">
+        <div class="result-header">
+          <div class="result-logo">DAMA</div>
+          <div class="result-meta">
+            <h2>شهادة إتمام الدراسة الثانوية العامة</h2>
+            <p>العام الدراسي 2025 / 2026</p>
+          </div>
+          <div class="result-stamp"><i class="fas fa-certificate"></i></div>
+        </div>
+        <div class="result-student">
+          <div class="student-avatar" id="studentAvatar">ط</div>
+          <div class="student-info">
+            <h1 id="rName">—</h1>
+            <div class="student-tags">
+              <span class="tag"><i class="fas fa-id-card"></i> <span id="rSeat">—</span></span>
+              <span class="tag"><i class="fas fa-school"></i> <span id="rSchool">—</span></span>
+              <span class="tag"><i class="fas fa-map-marker-alt"></i> <span id="rGov">—</span></span>
+              <span class="tag"><i class="fas fa-building"></i> <span id="rAdmin">—</span></span>
+              <span class="tag"><i class="fas fa-book"></i> <span id="rDiv">—</span></span>
+            </div>
+          </div>
+        </div>
+        <div class="result-summary">
+          <div class="summary-item"><span class="summary-label">الحالة</span><span class="summary-value" id="rStatus">—</span></div>
+          <div class="summary-item"><span class="summary-label">المجموع</span><span class="summary-value gold" id="rTotal">—</span></div>
+          <div class="summary-item"><span class="summary-label">النسبة</span><span class="summary-value" id="rPercent">—</span></div>
+        </div>
+        <div class="subjects-table">
+          <h3><i class="fas fa-list"></i> تفاصيل المواد</h3>
+          <table>
+            <thead><tr><th>المادة</th><th>الدرجة</th><th>العظمى</th><th>النسبة</th></tr></thead>
+            <tbody id="rSubjects"></tbody>
+            <tfoot><tr><th>المجموع</th><th id="rTotalFoot">—</th><th id="rMaxFoot">—</th><th id="rPercentFoot">—</th></tr></tfoot>
+          </table>
+        </div>
+        <div class="result-footer">
+          <div id="qrCode" class="qr-box"></div>
+          <div class="result-sign"><p>تم استخراج النتيجة من منصة DAMA</p><p class="small">التاريخ: <span id="rDate"></span></p></div>
+        </div>
+      </div>
+      <div class="result-actions">
+        <button class="btn btn-primary" id="btnPrint"><i class="fas fa-print"></i> طباعة PDF</button>
+        <button class="btn btn-success" id="btnImage"><i class="fas fa-image"></i> تحميل صورة</button>
+        <button class="btn btn-whatsapp" id="btnWhatsapp"><i class="fab fa-whatsapp"></i> واتساب</button>
+        <button class="btn btn-facebook" id="btnFacebook"><i class="fab fa-facebook-f"></i> فيسبوك</button>
+        <button class="btn btn-gold" id="btnCopy"><i class="fas fa-link"></i> نسخ الرابط</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="page-stats" class="page">
+    <div class="container">
+      <div class="section-head"><h2><i class="fas fa-chart-bar"></i> الإحصائيات</h2></div>
+      <div class="stats-grid">
+        <div class="glass big-stat"><i class="fas fa-users"></i><span class="num" id="sTotal">0</span><span class="lbl">إجمالي الطلاب</span></div>
+        <div class="glass big-stat"><i class="fas fa-check"></i><span class="num" id="sSuccess">0</span><span class="lbl">ناجح</span></div>
+        <div class="glass big-stat"><i class="fas fa-times"></i><span class="num" id="sFailed">0</span><span class="lbl">راسب</span></div>
+        <div class="glass big-stat"><i class="fas fa-percent"></i><span class="num" id="sRate">0%</span><span class="lbl">نسبة النجاح</span></div>
+      </div>
+      <div class="two-col">
+        <div class="glass panel"><h3><i class="fas fa-map"></i> أعلى المحافظات</h3><div id="topGovs" class="rank-list"></div></div>
+        <div class="glass panel"><h3><i class="fas fa-school"></i> أعلى المدارس</h3><div id="topSchools" class="rank-list"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="page-top" class="page">
+    <div class="container">
+      <div class="section-head"><h2><i class="fas fa-trophy"></i> أوائل الطلاب</h2></div>
+      <div class="top-tabs">
+        <button class="tab active" data-top="100">أوائل 100</button>
+        <button class="tab" data-top="500">أوائل 500</button>
+        <button class="tab" data-top="gov">أوائل كل محافظة</button>
+      </div>
+      <div id="topList" class="top-list"></div>
+    </div>
+  </section>
+
+  <section id="page-news" class="page">
+    <div class="container">
+      <div class="section-head"><h2><i class="fas fa-newspaper"></i> الأخبار</h2></div>
+      <div id="newsList" class="news-list"></div>
+    </div>
+  </section>
+
+  <section id="page-404" class="page">
+    <div class="container">
+      <div class="glass notfound">
+        <h1>404</h1>
+        <p>الصفحة غير موجودة</p>
+        <button class="btn btn-primary" data-route="home"><i class="fas fa-home"></i> الرئيسية</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="adminOverlay" class="admin-overlay hidden">
+  <div class="admin-panel glass">
+    <div class="admin-head">
+      <h2><i class="fas fa-user-shield"></i> لوحة تحكم المشرف</h2>
+      <button id="closeAdmin" class="icon-btn"><i class="fas fa-times"></i></button>
+    </div>
+    <div id="adminLogin" class="admin-section">
+      <div class="input-wrap"><i class="fas fa-lock"></i><input id="adminPass" type="password" placeholder="كلمة المرور" /></div>
+      <button id="adminLoginBtn" class="btn btn-primary btn-block">دخول</button>
+      <p class="hint">كلمة المرور الافتراضية: <code>dama2026</code></p>
+    </div>
+    <div id="adminDash" class="admin-section hidden">
+      <div class="admin-tabs">
+        <button class="tab active" data-atab="upload"><i class="fas fa-upload"></i> رفع Excel</button>
+        <button class="tab" data-atab="preview"><i class="fas fa-eye"></i> معاينة</button>
+        <button class="tab" data-atab="publish"><i class="fas fa-rocket"></i> نشر</button>
+        <button class="tab" data-atab="backup"><i class="fas fa-database"></i> النسخ الاحتياطي</button>
+        <button class="tab" data-atab="settings"><i class="fas fa-cog"></i> إعدادات</button>
+      </div>
+      <div class="admin-tab active" data-atab="upload">
+        <div class="upload-zone" id="uploadZone">
+          <i class="fas fa-cloud-arrow-up"></i>
+          <p>اسحب ملف Excel هنا أو اضغط للاختيار</p>
+          <input type="file" id="excelFile" accept=".xlsx,.xls" hidden />
+          <button class="btn btn-primary" id="pickFile">اختر ملف Excel</button>
+        </div>
+        <div id="uploadProgress" class="progress hidden"><div class="progress-bar"><div class="progress-fill"></div></div><p id="progressText">جاري المعالجة...</p></div>
+        <div id="uploadReport" class="report hidden"></div>
+      </div>
+      <div class="admin-tab" data-atab="preview">
+        <div id="previewInfo" class="info-box"></div>
+        <div class="table-wrap"><table id="previewTable"><thead><tr><th>رقم الجلوس</th><th>الاسم</th><th>المدرسة</th><th>المحافظة</th><th>المجموع</th></tr></thead><tbody></tbody></table></div>
+      </div>
+      <div class="admin-tab" data-atab="publish">
+        <div class="publish-actions">
+          <button class="btn btn-primary" id="btnBuild"><i class="fas fa-hammer"></i> بناء JSON</button>
+          <button class="btn btn-success" id="btnPublish"><i class="fas fa-rocket"></i> نشر النتائج</button>
+          <button class="btn btn-danger" id="btnClear"><i class="fas fa-trash"></i> حذف البيانات</button>
+        </div>
+        <div id="publishLog" class="log-box"></div>
+      </div>
+      <div class="admin-tab" data-atab="backup">
+        <div class="backup-actions">
+          <button class="btn btn-primary" id="btnBackup"><i class="fas fa-download"></i> إنشاء نسخة احتياطية</button>
+          <div class="upload-zone small"><p>استعادة من نسخة احتياطية</p><input type="file" id="restoreFile" accept=".json" hidden /><button class="btn btn-gold" id="pickRestore">اختر ملف</button></div>
+        </div>
+      </div>
+      <div class="admin-tab" data-atab="settings">
+        <div class="setting"><label>وضع الصيانة</label><input type="checkbox" id="setMaintenance" /></div>
+        <div class="setting"><label>إعلان</label><input type="text" id="setAnnouncement" placeholder="نص الإعلان..." /></div>
+        <div class="setting"><label>كلمة مرور جديدة</label><input type="password" id="setPass" placeholder="كلمة مرور جديدة" /></div>
+        <button class="btn btn-primary" id="btnSaveSettings"><i class="fas fa-save"></i> حفظ الإعدادات</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<footer class="footer">
+  <div class="container">
+    <div class="footer-grid">
+      <div><h3>DAMA</h3><p>منصة DAMA لعرض نتائج الثانوية العامة.</p></div>
+      <div><h4>روابط</h4><ul><li><a href="#home" data-route="home">الرئيسية</a></li><li><a href="#stats" data-route="stats">الإحصائيات</a></li><li><a href="#top" data-route="top">الأوائل</a></li></ul></div>
+      <div><h4>تواصل</h4><ul class="socials"><li><a href="#"><i class="fab fa-facebook"></i></a></li><li><a href="#"><i class="fab fa-whatsapp"></i></a></li><li><a href="#"><i class="fab fa-twitter"></i></a></li></ul></div>
+      <div><h4>إحصائيات</h4><p><i class="fas fa-eye"></i> الزوار: <span id="visitorCount">0</span></p><p><i class="fas fa-search"></i> البحث: <span id="searchCount">0</span></p></div>
+    </div>
+    <div class="footer-bottom"><p>© 2026 DAMA - جميع الحقوق محفوظة</p></div>
+  </div>
+</footer>
+
+<button id="adminTrigger" class="admin-trigger" aria-label="Admin"><i class="fas fa-user-shield"></i></button>
+<div id="toast" class="toast hidden"></div>
+<script src="app.js"></script>
+</body>
+</html>
